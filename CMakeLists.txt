@@ -38,8 +38,8 @@ endif()
 # Search for project-specific dependencies
 #============================================================================
 
-ign_find_package(sdformat9 REQUIRED VERSION 9.3.0)
-set(SDF_VER ${sdformat9_VERSION_MAJOR})
+ign_find_package(sdformat10 REQUIRED)
+set(SDF_VER ${sdformat10_VERSION_MAJOR})
 
 #--------------------------------------
 # Find ignition-plugin
@@ -48,18 +48,18 @@ set(IGN_PLUGIN_VER ${ignition-plugin1_VERSION_MAJOR})
 
 #--------------------------------------
 # Find ignition-transport
-ign_find_package(ignition-transport8 REQUIRED COMPONENTS log)
-set(IGN_TRANSPORT_VER ${ignition-transport8_VERSION_MAJOR})
+ign_find_package(ignition-transport10 REQUIRED COMPONENTS log)
+set(IGN_TRANSPORT_VER ${ignition-transport10_VERSION_MAJOR})
 
 #--------------------------------------
 # Find ignition-msgs
-ign_find_package(ignition-msgs5 REQUIRED VERSION 5.3)
-set(IGN_MSGS_VER ${ignition-msgs5_VERSION_MAJOR})
+ign_find_package(ignition-msgs7 REQUIRED)
+set(IGN_MSGS_VER ${ignition-msgs7_VERSION_MAJOR})
 
 #--------------------------------------
 # Find ignition-common
 # Always use the profiler component to get the headers, regardless of status.
-ign_find_package(ignition-common3 VERSION 3.4
+ign_find_package(ignition-common3 VERSION 3.5
   COMPONENTS
     profiler
     events
@@ -124,6 +124,8 @@ set(IGN_MATH_VER ${ignition-math6_VERSION_MAJOR})
 
 #--------------------------------------
 # Find protobuf
+# Module is needed to use the PROTOBUF_GENERATE_CPP
+set(protobuf_MODULE_COMPATIBLE TRUE)
 set(REQ_PROTOBUF_VER 3)
 ign_find_package(IgnProtobuf
                  VERSION ${REQ_PROTOBUF_VER}

@@ -581,14 +581,6 @@ msgs::Axis ignition::gazebo::convert(const sdf::JointAxis &_in)
 {
   msgs::Axis out;
   msgs::Set(out.mutable_xyz(), _in.Xyz());
-#ifndef _WIN32
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-  out.set_use_parent_model_frame(_in.UseParentModelFrame());
-#ifndef _WIN32
-# pragma GCC diagnostic pop
-#endif
   out.set_xyz_expressed_in(_in.XyzExpressedIn());
   out.set_damping(_in.Damping());
   out.set_friction(_in.Friction());
@@ -617,15 +609,10 @@ template<>
 sdf::JointAxis ignition::gazebo::convert(const msgs::Axis &_in)
 {
   sdf::JointAxis out;
-  out.SetXyz(msgs::Convert(_in.xyz()));
-#ifndef _WIN32
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-  out.SetUseParentModelFrame(_in.use_parent_model_frame());
-#ifndef _WIN32
-# pragma GCC diagnostic pop
-#endif
+  sdf::Errors errors = out.SetXyz(msgs::Convert(_in.xyz()));
+  for (const auto &err : errors) {
+    ignerr << err.Message() << std::endl;
+  }
   out.SetXyzExpressedIn(_in.xyz_expressed_in());
   out.SetDamping(_in.damping());
   out.SetFriction(_in.friction());
@@ -648,6 +635,21 @@ msgs::Scene ignition::gazebo::convert(const sdf::Scene &_in)
   out.set_shadows(_in.Shadows());
   out.set_grid(_in.Grid());
   out.set_origin_visual(_in.OriginVisual());
+
+  if (_in.Sky())
+  {
+    msgs::Sky *skyMsg = out.mutable_sky();
+    skyMsg->set_time(_in.Sky()->Time());
+    skyMsg->set_sunrise(_in.Sky()->Sunrise());
+    skyMsg->set_sunset(_in.Sky()->Sunset());
+    skyMsg->set_wind_speed(_in.Sky()->CloudSpeed());
+    skyMsg->set_wind_direction(_in.Sky()->CloudDirection().Radian());
+    skyMsg->set_humidity(_in.Sky()->CloudHumidity());
+    skyMsg->set_mean_cloud_size(_in.Sky()->CloudMeanSize());
+    msgs::Set(skyMsg->mutable_cloud_ambient(),
+        _in.Sky()->CloudAmbient());
+  }
+
   return out;
 }
 
@@ -663,6 +665,20 @@ sdf::Scene ignition::gazebo::convert(const msgs::Scene &_in)
   out.SetShadows(_in.shadows());
   out.SetGrid(_in.grid());
   out.SetOriginVisual(_in.origin_visual());
+
+  if (_in.has_sky())
+  {
+    sdf::Sky sky;
+    sky.SetTime(_in.sky().time());
+    sky.SetSunrise(_in.sky().sunrise());
+    sky.SetSunset(_in.sky().sunset());
+    sky.SetCloudSpeed(_in.sky().wind_speed());
+    sky.SetCloudDirection(math::Angle(_in.sky().wind_direction()));
+    sky.SetCloudHumidity(_in.sky().humidity());
+    sky.SetCloudMeanSize(_in.sky().mean_cloud_size());
+    sky.SetCloudAmbient(msgs::Convert(_in.sky().cloud_ambient()));
+    out.SetSky(sky);
+  }
   return out;
 }
 

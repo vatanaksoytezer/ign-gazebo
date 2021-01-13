@@ -297,6 +297,13 @@ bool EntityComponentManager::RemoveComponent(
   this->dataPtr->periodicChangedComponents.erase(_key);
 
   this->UpdateViews(_entity);
+
+  // Add component to map of removed components
+  {
+    std::lock_guard<std::mutex> lock(this->dataPtr->removedComponentsMutex);
+    this->dataPtr->removedComponents.insert(std::make_pair(_entity, _key));
+  }
+
   return true;
 }
 
@@ -703,6 +710,62 @@ void EntityComponentManager::RebuildViews()
 }
 
 //////////////////////////////////////////////////
+void EntityComponentManagerPrivate::SetRemovedComponentsMsgs(Entity &_entity,
+                                        msgs::SerializedEntity *_entityMsg)
+{
+  std::lock_guard<std::mutex> lock(this->removedComponentsMutex);
+  uint64_t nEntityKeys = this->removedComponents.count(_entity);
+  if (nEntityKeys == 0)
+    return;
+
+  auto it = this->removedComponents.find(_entity);
+  for (uint64_t i = 0; i < nEntityKeys; ++i)
+  {
+    auto compMsg = _entityMsg->add_components();
+
+    auto removedComponent = it->second;
+
+    // Empty data is needed for the component to be processed afterwards
+    compMsg->set_component(" ");
+    compMsg->set_type(removedComponent.first);
+    compMsg->set_remove(true);
+
+    it++;
+  }
+}
+
+//////////////////////////////////////////////////
+void EntityComponentManagerPrivate::SetRemovedComponentsMsgs(Entity &_entity,
+                                    msgs::SerializedStateMap &_msg)
+{
+  std::lock_guard<std::mutex> lock(this->removedComponentsMutex);
+  uint64_t nEntityKeys = this->removedComponents.count(_entity);
+  if (nEntityKeys == 0)
+    return;
+
+  // Find the entity in the message
+  auto entIter = _msg.mutable_entities()->find(_entity);
+
+  auto it = this->removedComponents.find(_entity);
+  for (uint64_t i = 0; i < nEntityKeys; ++i)
+  {
+    auto removedComponent = it->second;
+
+    msgs::SerializedComponent compMsg;
+
+    // Empty data is needed for the component to be processed afterwards
+    compMsg.set_component(" ");
+    compMsg.set_type(removedComponent.first);
+    compMsg.set_remove(true);
+
+    (*(entIter->second.mutable_components()))[
+      static_cast<int64_t>(removedComponent.first)] = compMsg;
+
+    it++;
+  }
+}
+
+//////////////////////////////////////////////////
 void EntityComponentManager::AddEntityToMessage(msgs::SerializedState &_msg,
     Entity _entity, const std::unordered_set<ComponentTypeId> &_types) const
 {
@@ -748,9 +811,11 @@ void EntityComponentManager::AddEntityToMessage(msgs::SerializedState &_msg,
     compBase->Serialize(ostr);
 
     compMsg->set_component(ostr.str());
-
-    // TODO(anyone) Set component being removed once we have a way to queue it
   }
+
+  // Add a component to the message and set it to be removed if the component
+  // exists in the removedComponents map.
+  this->dataPtr->SetRemovedComponentsMsgs(_entity, entityMsg);
 }
 
 //////////////////////////////////////////////////
