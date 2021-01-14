@@ -19,6 +19,7 @@
 #include <tinyxml2.h>
 
 #include <ignition/common/Console.hh>
+#include <ignition/common/Util.hh>
 #include <ignition/transport/Node.hh>
 #include <sdf/Box.hh>
 #include <sdf/Cylinder.hh>
@@ -86,7 +87,7 @@ class SimulationRunnerTest : public ::testing::TestWithParam<int>
     common::Console::SetVerbosity(4);
 
     common::setenv("IGN_GAZEBO_SYSTEM_PLUGIN_PATH",
-      common::joinPaths(PROJECT_BINARY_PATH, "lib"));
+      (std::string(PROJECT_BINARY_PATH) + "/lib").c_str());
   }
 };
 

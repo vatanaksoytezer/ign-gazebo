@@ -16,7 +16,6 @@
  */
 
 #include <mutex>
-#include <string>
 
 #include <ignition/common/Profiler.hh>
 #include <ignition/math/Vector3.hh>
