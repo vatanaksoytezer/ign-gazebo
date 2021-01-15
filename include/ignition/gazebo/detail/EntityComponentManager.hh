@@ -551,6 +551,5 @@ bool EntityComponentManager::RemoveComponent(Entity _entity)
 }
 }
 }
-}
 
 #endif
