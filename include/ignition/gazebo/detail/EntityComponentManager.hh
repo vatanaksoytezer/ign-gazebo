@@ -19,6 +19,7 @@
 
 #include <cstring>
 #include <map>
+#include <optional>
 #include <set>
 #include <type_traits>
 #include <utility>
@@ -546,6 +547,7 @@ bool EntityComponentManager::RemoveComponent(Entity _entity)
 {
   const auto typeId = ComponentTypeT::typeId;
   return this->RemoveComponent(_entity, typeId);
+}
 }
 }
 }
