@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include <ignition/common/Console.hh>
 #include <ignition/common/SingletonT.hh>
 #include <ignition/common/Util.hh>
 #include <ignition/gazebo/components/Component.hh>
@@ -254,8 +255,20 @@ namespace components
     {
       std::unique_ptr<ComponentStorageBase> storage;
       auto it = this->storagesById.find(_typeId);
-      if (it != this->storagesById.end() && nullptr != it->second)
+      if (it == this->storagesById.end())
+      {
+        ignerr << "Failed to find component type [" << _typeId
+               << "]. Has it been registered?" << std::endl;
+      }
+      else if (nullptr == it->second)
+      {
+        ignerr << "Component type [" << _typeId
+               << "] has null storage descriptor." << std::endl;
+      }
+      else
+      {
         storage = it->second->Create();
+      }
 
       return storage;
     }
