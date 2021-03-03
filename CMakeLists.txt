@@ -90,6 +90,7 @@ ign_find_package (Qt5
 # Find ignition-physics
 ign_find_package(ignition-physics5
   COMPONENTS
+    heightmap
     mesh
     sdf
   REQUIRED
