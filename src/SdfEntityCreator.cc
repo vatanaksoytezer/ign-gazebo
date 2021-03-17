@@ -41,6 +41,7 @@
 #include "ignition/gazebo/components/Joint.hh"
 #include "ignition/gazebo/components/JointAxis.hh"
 #include "ignition/gazebo/components/JointType.hh"
+#include "ignition/gazebo/components/LaserRetro.hh"
 #include "ignition/gazebo/components/Lidar.hh"
 #include "ignition/gazebo/components/Light.hh"
 #include "ignition/gazebo/components/LightType.hh"
@@ -55,6 +56,7 @@
 #include "ignition/gazebo/components/Name.hh"
 #include "ignition/gazebo/components/ParentLinkName.hh"
 #include "ignition/gazebo/components/ParentEntity.hh"
+#include "ignition/gazebo/components/Physics.hh"
 #include "ignition/gazebo/components/Pose.hh"
 #include "ignition/gazebo/components/RgbdCamera.hh"
 #include "ignition/gazebo/components/Scene.hh"
@@ -107,6 +109,30 @@ static math::Pose3d ResolveSdfPose(const sdf::SemanticPose &_semPose)
   }
 
   return pose;
+}
+
+static std::optional<sdf::JointAxis> ResolveJointAxis(
+    const sdf::JointAxis &_unresolvedAxis)
+{
+  math::Vector3d axisXyz;
+  const sdf::Errors resolveAxisErrors = _unresolvedAxis.ResolveXyz(axisXyz);
+  if (!resolveAxisErrors.empty())
+  {
+    ignerr << "Failed to resolve axis" << std::endl;
+    return std::nullopt;
+  }
+
+  sdf::JointAxis resolvedAxis = _unresolvedAxis;
+
+  const sdf::Errors setXyzErrors = resolvedAxis.SetXyz(axisXyz);
+  if (!setXyzErrors.empty())
+  {
+    ignerr << "Failed to resolve axis" << std::endl;
+    return std::nullopt;
+  }
+
+  resolvedAxis.SetXyzExpressedIn("");
+  return resolvedAxis;
 }
 
 //////////////////////////////////////////////////
@@ -203,6 +229,44 @@ Entity SdfEntityCreator::CreateEntities(const sdf::World *_world)
   this->dataPtr->ecm->CreateComponent(worldEntity,
       components::Gravity(_world->Gravity()));
 
+  // Physics
+  // \todo(anyone) Support picking a specific physics profile
+  auto physics = _world->PhysicsByIndex(0);
+  if (!physics)
+  {
+    physics = _world->PhysicsDefault();
+  }
+  this->dataPtr->ecm->CreateComponent(worldEntity,
+      components::Physics(*physics));
+
+  // Populate physics options that aren't accessible outside the Element()
+  // See https://github.com/osrf/sdformat/issues/508
+  if (physics->Element())
+  {
+    if (physics->Element()->HasElement("dart"))
+    {
+      auto dartElem = physics->Element()->GetElement("dart");
+
+      if (dartElem->HasElement("collision_detector"))
+      {
+        auto collisionDetector =
+            dartElem->Get<std::string>("collision_detector");
+
+        this->dataPtr->ecm->CreateComponent(worldEntity,
+            components::PhysicsCollisionDetector(collisionDetector));
+      }
+      if (dartElem->HasElement("solver") &&
+          dartElem->GetElement("solver")->HasElement("solver_type"))
+      {
+        auto solver =
+            dartElem->GetElement("solver")->Get<std::string>("solver_type");
+
+        this->dataPtr->ecm->CreateComponent(worldEntity,
+            components::PhysicsSolver(solver));
+      }
+    }
+  }
+
   // MagneticField
   this->dataPtr->ecm->CreateComponent(worldEntity,
       components::MagneticField(_world->MagneticField()));
@@ -281,6 +345,8 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Model *_model,
 
   // Links
   bool canonicalLinkCreated = false;
+  const auto *canonicalLink = _model->CanonicalLink();
+
   for (uint64_t linkIndex = 0; linkIndex < _model->LinkCount();
       ++linkIndex)
   {
@@ -289,9 +355,7 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Model *_model,
 
     this->SetParent(linkEntity, modelEntity);
 
-    if (_createCanonicalLink &&
-        ((_model->CanonicalLinkName().empty() && linkIndex == 0) ||
-        (link == _model->CanonicalLink())))
+    if (_createCanonicalLink && canonicalLink == link)
     {
       this->dataPtr->ecm->CreateComponent(linkEntity,
           components::CanonicalLink());
@@ -324,10 +388,19 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Model *_model,
 
     // Create nested model. Make sure to only create canonical link component
     // in the nested model if a canonical link has not been created in this
-    // model yet. Also override static propery of the nested model if this model
-    //  is static
+    // model yet and the canonical link of the top-level model is actually in
+    // the nested model. Also override static propery of the nested model if
+    // this model is static
+
+    const bool canonicalLinkInNestedModel =
+      (canonicalLink == nestedModel->CanonicalLink());
+    const bool createCanonicalLinkInNestedModel =
+      _createCanonicalLink
+      && !canonicalLinkCreated
+      && canonicalLinkInNestedModel;
+
     auto nestedModelEntity = this->CreateEntities(nestedModel,
-        (_createCanonicalLink && !canonicalLinkCreated), isStatic);
+        createCanonicalLinkInNestedModel, isStatic);
 
     this->SetParent(nestedModelEntity, modelEntity);
   }
@@ -469,14 +542,30 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Joint *_joint)
 
   if (_joint->Axis(0))
   {
+    auto resolvedAxis = ResolveJointAxis(*_joint->Axis(0));
+    if (!resolvedAxis)
+    {
+      ignerr << "Failed to resolve joint axis 0 for joint '" << _joint->Name()
+             << "'" << std::endl;
+      return kNullEntity;
+    }
+
     this->dataPtr->ecm->CreateComponent(jointEntity,
-        components::JointAxis(*_joint->Axis(0)));
+        components::JointAxis(std::move(*resolvedAxis)));
   }
 
   if (_joint->Axis(1))
   {
+    auto resolvedAxis = ResolveJointAxis(*_joint->Axis(1));
+    if (!resolvedAxis)
+    {
+      ignerr << "Failed to resolve joint axis 1 for joint '" << _joint->Name()
+             << "'" << std::endl;
+      return kNullEntity;
+    }
+
     this->dataPtr->ecm->CreateComponent(jointEntity,
-        components::JointAxis2(*_joint->Axis(1)));
+        components::JointAxis2(std::move(*resolvedAxis)));
   }
 
   this->dataPtr->ecm->CreateComponent(jointEntity,
@@ -485,10 +574,39 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Joint *_joint)
       components::Name(_joint->Name()));
   this->dataPtr->ecm->CreateComponent(jointEntity ,
       components::ThreadPitch(_joint->ThreadPitch()));
-  this->dataPtr->ecm->CreateComponent(jointEntity,
-      components::ParentLinkName(_joint->ParentLinkName()));
-  this->dataPtr->ecm->CreateComponent(jointEntity,
-      components::ChildLinkName(_joint->ChildLinkName()));
+
+  std::string resolvedParentLinkName;
+  const auto resolveParentErrors =
+    _joint->ResolveParentLink(resolvedParentLinkName);
+  if (!resolveParentErrors.empty())
+  {
+    ignerr << "Failed to resolve parent link for joint '" << _joint->Name()
+           << "' with parent name '" << _joint->ParentLinkName() << "'"
+           << std::endl;
+
+    return kNullEntity;
+  }
+  this->dataPtr->ecm->CreateComponent(
+      jointEntity, components::ParentLinkName(resolvedParentLinkName));
+
+  std::string resolvedChildLinkName;
+  const auto resolveChildErrors =
+    _joint->ResolveChildLink(resolvedChildLinkName);
+  if (!resolveChildErrors.empty())
+  {
+    ignerr << "Failed to resolve child link for joint '" << _joint->Name()
+           << "' with child name '" << _joint->ChildLinkName() << "'"
+           << std::endl;
+    for (const auto &error : resolveChildErrors)
+    {
+      ignerr << error << std::endl;
+    }
+
+    return kNullEntity;
+  }
+
+  this->dataPtr->ecm->CreateComponent(
+      jointEntity, components::ChildLinkName(resolvedChildLinkName));
 
   return jointEntity;
 }
@@ -513,6 +631,12 @@ Entity SdfEntityCreator::CreateEntities(const sdf::Visual *_visual)
       components::Transparency(_visual->Transparency()));
   this->dataPtr->ecm->CreateComponent(visualEntity,
       components::VisibilityFlags(_visual->VisibilityFlags()));
+
+  if (_visual->HasLaserRetro())
+  {
+    this->dataPtr->ecm->CreateComponent(visualEntity,
+        components::LaserRetro(_visual->LaserRetro()));
+  }
 
   if (_visual->Geom())
   {
