@@ -674,7 +674,12 @@ rendering::VisualPtr SceneManager::CreateActor(Entity _id,
                 << "]" << std::endl;
         return nullptr;
       }
-      meshSkel->AddAnimation(firstAnim);
+
+      // Copy animation so that meshSkel can own it
+      auto newAnim = new common::SkeletonAnimation(firstAnim->Name());
+      *newAnim = *firstAnim;
+
+      meshSkel->AddAnimation(newAnim);
       mapAnimNameId[animName] = numAnims++;
     }
   }
@@ -950,10 +955,18 @@ std::map<std::string, math::Matrix4d> SceneManager::ActorMeshAnimationAt(
   if (this->dataPtr->actorTrajectories.find(_id)
       == this->dataPtr->actorTrajectories.end())
   {
+    ignerr << "Found no trajectories for entity [" << _id << "]" << std::endl;
     return allFrames;
   }
 
   auto trajs = this->dataPtr->actorTrajectories[_id];
+
+  if (trajs.empty())
+  {
+    ignerr << "Empty trajectory for entity [" << _id << "]" << std::endl;
+    return allFrames;
+  }
+
   bool followTraj = true;
   if (1 == trajs.size() && nullptr == trajs[0].Waypoints())
   {
@@ -963,7 +976,7 @@ std::map<std::string, math::Matrix4d> SceneManager::ActorMeshAnimationAt(
   auto firstTraj = trajs.begin();
   auto poseFrame = common::PoseKeyFrame(0.0);
 
-  common::TrajectoryInfo traj = trajs[0];
+  common::TrajectoryInfo &traj = trajs[0];
 
   using TP = std::chrono::steady_clock::time_point;
   auto totalTime = trajs.rbegin()->EndTime() - trajs.begin()->StartTime();
@@ -1018,6 +1031,12 @@ std::map<std::string, math::Matrix4d> SceneManager::ActorMeshAnimationAt(
   {
     auto skel = vIt->second;
     unsigned int animIndex = traj.AnimIndex();
+    auto anim = skel->Animation(animIndex);
+    if (nullptr == anim)
+    {
+      return allFrames;
+    }
+
     std::map<std::string, math::Matrix4d> rawFrames;
 
     double timeSeconds = std::chrono::duration<double>(_time).count();
@@ -1027,12 +1046,11 @@ std::map<std::string, math::Matrix4d> SceneManager::ActorMeshAnimationAt(
       double distance = traj.DistanceSoFar(_time);
       if (distance < 0.1)
       {
-        rawFrames = skel->Animation(animIndex)->PoseAt(timeSeconds, !noLoop);
+        rawFrames = anim->PoseAt(timeSeconds, !noLoop);
       }
       else
       {
-        rawFrames = skel->Animation(animIndex)->PoseAtX(distance,
-                                        skel->RootNode()->Name());
+        rawFrames = anim->PoseAtX(distance, skel->RootNode()->Name());
       }
     }
     else
