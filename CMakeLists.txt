@@ -19,6 +19,7 @@ ign_configure_project(VERSION_SUFFIX pre1)
 #============================================================================
 # Set project-specific options
 #============================================================================
+set(OpenGL_GL_PREFERENCE GLVND)
 
 option(ENABLE_PROFILER "Enable Ignition Profiler" FALSE)
 
