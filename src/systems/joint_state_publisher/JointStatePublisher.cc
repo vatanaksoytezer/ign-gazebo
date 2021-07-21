@@ -235,7 +235,10 @@ void JointStatePublisher::PostUpdate(const UpdateInfo &_info,
       _ecm.Component<components::JointForce>(joint);
     if (jointForce)
     {
-      for (size_t i = 0; i < jointForce->Data().size(); ++i)
+      ignmsg << "In joint force" << std::endl;
+      const auto force_size = jointForce->Data().size();
+      ignmsg << "Force size " << force_size << std::endl;
+      for (size_t i = 0; i < force_size; ++i)
       {
         if (i == 0)
         {
