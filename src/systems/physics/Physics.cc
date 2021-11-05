@@ -2058,7 +2058,7 @@ void PhysicsPrivate::UpdatePhysics(EntityComponentManager &_ecm)
         math::AxisAlignedBox bbox =
             math::eigen3::convert(bbModel->GetAxisAlignedBoundingBox());
         auto state = _bbox->SetData(bbox, this->axisAlignedBoxEql) ?
-            ComponentState::OneTimeChange :
+            ComponentState::PeriodicChange :
             ComponentState::NoChange;
         _ecm.SetChanged(_entity, components::AxisAlignedBox::typeId, state);
 
@@ -2749,8 +2749,7 @@ void PhysicsPrivate::UpdateSim(EntityComponentManager &_ecm,
         if (auto jointPhys = this->entityJointMap.Get(_entity))
         {
           _jointPos->Data().resize(jointPhys->GetDegreesOfFreedom());
-          for (std::size_t i = 0; i < jointPhys->GetDegreesOfFreedom();
-               ++i)
+          for (std::size_t i = 0; i < jointPhys->GetDegreesOfFreedom(); ++i)
           {
             _jointPos->Data()[i] = jointPhys->GetPosition(i);
           }
@@ -2886,7 +2885,7 @@ void PhysicsPrivate::UpdateCollisions(EntityComponentManager &_ecm)
           // Clear the last contact data
           auto state = _contacts->SetData(contactsComp,
             this->contactsEql) ?
-            ComponentState::OneTimeChange :
+            ComponentState::PeriodicChange :
             ComponentState::NoChange;
           _ecm.SetChanged(
             _collEntity1, components::ContactSensorData::typeId, state);
@@ -2911,7 +2910,7 @@ void PhysicsPrivate::UpdateCollisions(EntityComponentManager &_ecm)
 
         auto state = _contacts->SetData(contactsComp,
           this->contactsEql) ?
-          ComponentState::OneTimeChange :
+          ComponentState::PeriodicChange :
           ComponentState::NoChange;
         _ecm.SetChanged(
           _collEntity1, components::ContactSensorData::typeId, state);
